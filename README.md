@@ -32,7 +32,7 @@ With a single click, it sets up the **Fabric Loader**, injects an essential suit
 ## 🚀 Quick Start Guide
 
 1. **Download** the latest `MCperfBooster.exe` from [GitHub Releases](https://github.com/SecretLUL/MCperfBooster/releases).
-2. **Launch** the program (no installation required).
+2. **Launch** the program (no installation required). If the official Minecraft Launcher is not installed yet, it offers Mojang's download.
 3. **Select your Minecraft version** (e.g. `26.3`, `1.21.11`, `1.20.1`).
 4. Click **`Inject Performance Mods`**. The first time, it asks before downloading GraalVM.
 5. Open your official **Minecraft Launcher**, select the **Fabric** profile it names, and enjoy high FPS!
@@ -131,7 +131,7 @@ Switched on or off under **Advanced** in the app; the choice is remembered. A mo
   * `ModrinthService`: Asynchronous HTTP client targeting the Modrinth v2 REST API to locate primary Fabric-compatible jar releases.
   * `ModManagerService`: Inspects existing mods (reads internal `fabric.mod.json`), removes obsolete jars, and downloads updates.
   * `UpdateService`: Checks GitHub REST API for new releases, verifies the downloaded executable (PE header and the release asset's SHA-256 digest), and swaps it in by renaming the running executable to `<name>.old.exe`, which the new build deletes on startup.
-* **Testing:** xUnit test suite (`MCperfBooster.Tests`) covering version parsing, zip metadata inspection, mod presets, directory validation, the GraalVM installer, the Java arguments and the graphics card carry-over.
+* **Testing:** xUnit test suite (`MCperfBooster.Tests`) covering version parsing, zip metadata inspection, mod presets, directory validation, the launcher check, the GraalVM installer, the Java arguments and the graphics card carry-over.
 
 ---
 
