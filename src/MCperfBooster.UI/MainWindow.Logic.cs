@@ -230,18 +230,27 @@ internal sealed partial class MainWindow
         _appVersionText = $"v{_updateService.CurrentVersion}";
         _minecraftPath = _minecraftService.GetDefaultMinecraftDirectory();
         _minecraftDirValid = _minecraftService.IsValidMinecraftDirectory(_minecraftPath);
+        bool launcherInstalled = IsLauncherInstalled();
         Repaint();
 
         try
         {
+            if (!_minecraftDirValid)
+            {
+                // Scanning would create .minecraft\mods in a folder the launcher never made.
+                ShowMissingDirectoryHint(launcherInstalled);
+            }
+
+            // On every start until a launcher is found, and before the versions load: without one
+            // there is nothing to start Fabric with.
+            if (!launcherInstalled)
+            {
+                SuggestLauncherDownload();
+            }
+
             if (_minecraftDirValid)
             {
                 await InitializeVersionsAsync();
-            }
-            else
-            {
-                // Scanning would create .minecraft\mods in a folder the launcher never made.
-                ShowMissingDirectoryHint();
             }
         }
         finally
@@ -306,10 +315,12 @@ internal sealed partial class MainWindow
     /// </summary>
     private bool MinecraftFolderExists => Directory.Exists(_minecraftPath);
 
-    private void ShowMissingDirectoryHint()
+    private void ShowMissingDirectoryHint(bool launcherInstalled)
     {
         _statusText = MinecraftFolderExists ? "Minecraft folder not set up yet" : "Minecraft folder not found";
-        _subStatusText = "Start the Minecraft Launcher once so it sets up .minecraft, or choose the folder with 'Browse'.";
+        _subStatusText = launcherInstalled
+            ? "Start the Minecraft Launcher once so it sets up .minecraft, or choose the folder with 'Browse'."
+            : "Install the Minecraft Launcher and start it once so it sets up .minecraft, or choose the folder with 'Browse'.";
         _modCountText = "0 / 0 Installed";
         _modCountColor = Theme.Warning;
         _fabricStatusText = "Unknown";
@@ -402,15 +413,67 @@ internal sealed partial class MainWindow
         if (_minecraftDirValid && _minecraftService.IsValidMinecraftDirectory(_minecraftPath)) return true;
 
         _minecraftDirValid = false;
-        ShowMissingDirectoryHint();
+        bool launcherInstalled = IsLauncherInstalled();
+        ShowMissingDirectoryHint(launcherInstalled);
         string problem = MinecraftFolderExists
             ? $"The Minecraft folder has not been set up by the launcher yet (no launcher profiles or versions folder):\n{_minecraftPath}"
             : $"No Minecraft installation was found at:\n{_minecraftPath}";
+        string firstStep = launcherInstalled
+            ? "Start the Minecraft Launcher once"
+            : $"Install the Minecraft Launcher ({MinecraftLauncher.DownloadUrl}) and start it once";
         Warn($"{problem}\n\n" +
-             "Start the Minecraft Launcher once so it sets up the folder and then click 'Refresh', " +
+             $"{firstStep} so it sets up the folder and then click 'Refresh', " +
              "or choose your .minecraft folder with 'Browse'.",
             "Minecraft Not Found");
         return false;
+    }
+
+    /// <summary>
+    /// Whether the official Minecraft Launcher is installed. When that cannot be found out, it counts as installed,
+    /// so nobody is sent off to download a launcher they may well have.
+    /// </summary>
+    /// <remarks>
+    /// Called on the UI thread on purpose, like <see cref="ConfirmLauncherClosed"/>: one question to Windows, a
+    /// registry value, two files and the process list take a few milliseconds.
+    /// </remarks>
+    private static bool IsLauncherInstalled()
+    {
+        try
+        {
+            return MinecraftLauncher.IsInstalled();
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Offers Mojang's download when the official Minecraft Launcher is missing: MCperfBooster sets Fabric up for it,
+    /// and Minecraft is started from it. Yes opens the download in the browser; No changes nothing else.
+    /// </summary>
+    private void SuggestLauncherDownload()
+    {
+        int answer = Native.MessageBoxW(_hwnd,
+            "The official Minecraft Launcher was not found on this PC.\n\n" +
+            "MCperfBooster sets up Fabric and the performance mods for this launcher, and you start Minecraft from it.\n\n" +
+            "Download the Minecraft Launcher now? Your browser will open Mojang's download:\n" +
+            MinecraftLauncher.DownloadUrl,
+            "Minecraft Launcher Not Found",
+            Native.MB_YESNO | Native.MB_ICONQUESTION);
+
+        if (answer != Native.IDYES) return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = MinecraftLauncher.DownloadUrl, UseShellExecute = true });
+        }
+        catch
+        {
+            // 'Yes' was clicked, so a browser that does not open must not go unnoticed: the link is shown to copy.
+            Warn($"Your browser could not be opened. Download the Minecraft Launcher from:\n{MinecraftLauncher.DownloadUrl}",
+                "Minecraft Launcher Not Found");
+        }
     }
 
     // ---- Scanning --------------------------------------------------------
@@ -1131,9 +1194,12 @@ internal sealed partial class MainWindow
         }
         else
         {
+            string firstStep = IsLauncherInstalled()
+                ? "If Minecraft has never been started, start the launcher once first."
+                : $"The Minecraft Launcher is not installed yet: install it ({MinecraftLauncher.DownloadUrl}) and start it once first.";
             Warn($"The selected folder does not appear to be a Minecraft directory:\n{selected}\n\n" +
                  "Choose the .minecraft folder the launcher uses (it contains launcher_profiles.json or a 'versions' folder). " +
-                 "If Minecraft has never been started, start the launcher once first.",
+                 firstStep,
                 "Invalid Directory");
         }
     }
